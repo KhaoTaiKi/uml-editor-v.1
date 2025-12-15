@@ -1,0 +1,207 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0; overflow: hidden; background-color: #f4f4f9; user-select: none;
+}
+
+/* --- Glass Toolbar --- */
+#toolbar {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    /* พื้นหลังแบบกระจกใส */
+    background: rgba(255, 255, 255, 0.65); 
+    backdrop-filter: blur(12px); 
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    
+    padding: 10px 20px; border-radius: 50px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); 
+    z-index: 1000;
+    display: flex; gap: 8px; align-items: center;
+}
+
+.separator { width: 1px; height: 20px; background: rgba(0,0,0,0.1); }
+
+button {
+    padding: 8px 15px; cursor: pointer; 
+    border: 1px solid transparent; /* ซ่อนขอบปกติ */
+    background: rgba(255, 255, 255, 0.5); /* ปุ่มใสๆ */
+    border-radius: 25px; font-size: 13px; font-weight: 600; color: #444;
+    transition: all 0.2s; display: flex; align-items: center; gap: 5px; white-space: nowrap;
+}
+button:hover { 
+    background: rgba(255, 255, 255, 0.9); 
+    transform: translateY(-2px); 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+button.active { 
+    background: #e3f2fd; color: #1565C0; 
+    border-color: rgba(33, 150, 243, 0.3);
+}
+button#btn-delete-mode.active { 
+    background: #ffebee; color: #c62828; 
+    border-color: rgba(239, 83, 80, 0.3);
+}
+button.add-btn { color: #2e7d32; background: rgba(232, 245, 233, 0.6); }
+button.clear-btn { color: #555; }
+button#btn-help { color: #fff; background-color: rgba(96, 125, 139, 0.9); }
+button#btn-help:hover { background-color: #546E7A; }
+
+#canvas {
+    width: 100vw; height: 100vh; position: relative;
+    /* Grid ให้ดูนวลขึ้น */
+    background-image: linear-gradient(#e0e0e0 1px, transparent 1px), linear-gradient(90deg, #e0e0e0 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+
+path.connection {
+    stroke: #546E7A; stroke-width: 2px; fill: none; 
+    pointer-events: visibleStroke; 
+    cursor: pointer; transition: stroke 0.2s;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1)); /* เงาเส้นนิดๆ */
+}
+path.connection:hover { stroke: #2196F3; stroke-width: 4px; }
+
+circle.conn-handle {
+    r: 6; cursor: grab; pointer-events: all;
+    stroke: #fff; stroke-width: 2px; transition: r 0.1s, fill 0.1s;
+    opacity: 0; 
+}
+path.connection:hover + circle.conn-handle,
+path.connection:hover + circle.conn-handle + circle.conn-handle,
+circle.conn-handle:hover,
+body.dragging-handle circle.conn-handle { opacity: 1; }
+circle.conn-handle.start { fill: #4CAF50; }
+circle.conn-handle.end { fill: #F44336; }
+
+.snap-port {
+    position: absolute; width: 8px; height: 8px; 
+    background: transparent; border-radius: 50%;
+    transform: translate(-50%, -50%); z-index: 20; pointer-events: none; 
+}
+body.dragging-handle .snap-port { background: rgba(33, 150, 243, 0.3); pointer-events: all; }
+.snap-port.active { 
+    width: 14px; height: 14px; 
+    background: #2196F3; border: 3px solid white;
+    box-shadow: 0 0 10px rgba(33, 150, 243, 0.6); opacity: 1;
+}
+
+/* --- Class Box สไตล์ Modern --- */
+.uml-class {
+    position: absolute; width: 180px; 
+    background: rgba(255, 255, 255, 0.95); /* เกือบๆ ใส */
+    border: 1px solid #90A4AE; 
+    border-radius: 12px; /* โค้งมน */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1); /* เงานุ่มๆ */
+    z-index: 10;
+    display: flex; flex-direction: column; overflow: hidden; transition: box-shadow 0.2s, transform 0.1s;
+}
+.uml-class:hover { 
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15); 
+    transform: translateY(-2px);
+    cursor: grab; 
+    border-color: #2196F3;
+}
+.uml-class.source-selected { 
+    border-color: #2196F3; 
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3); 
+}
+
+.uml-header { 
+    background: linear-gradient(to bottom, #E3F2FD, #BBDEFB); 
+    padding: 12px; text-align: center; font-weight: bold; 
+    border-bottom: 1px solid #90A4AE; color: #263238; 
+}
+.uml-attributes, .uml-methods { 
+    background-color: transparent; 
+    padding: 8px 12px; font-size: 13px; color: #37474F; 
+    border-bottom: 1px dashed #CFD8DC; 
+    display: flex; flex-direction: column; 
+}
+.uml-methods { border-bottom: none; }
+.uml-attributes:empty, .uml-methods:empty { display: none; padding: 0; border: none; }
+.uml-class:has(.uml-attributes:empty):has(.uml-methods:empty) .uml-header { border-bottom: none; }
+
+.uml-item { margin-bottom: 4px; cursor: text; min-height: 18px; transition: background 0.1s; border-radius: 4px; padding: 0 4px; }
+.uml-item:hover { background-color: rgba(33, 150, 243, 0.1); }
+[contenteditable="true"] { outline: 2px solid #2196F3; background: #fff; padding: 2px; cursor: text; border-radius: 4px; }
+
+/* --- Glass Context Menu --- */
+#context-menu {
+    position: absolute; display: none; 
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0,0,0,0.1);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.15); 
+    border-radius: 8px; z-index: 3000; width: 160px; overflow: hidden;
+}
+.menu-item { padding: 10px 15px; cursor: pointer; font-size: 14px; color: #333; transition: background 0.1s; }
+.menu-item:hover { background-color: rgba(33, 150, 243, 0.1); color: #1565C0; }
+.menu-item.delete { color: #d32f2f; border-top: 1px solid rgba(0,0,0,0.05); }
+.menu-item.delete:hover { background-color: #ffebee; }
+
+#status-msg { 
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); 
+    background: rgba(38, 50, 56, 0.9); backdrop-filter: blur(4px);
+    color: white; padding: 10px 25px; border-radius: 30px; 
+    font-size: 14px; display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 2000; 
+}
+
+/* --- Modal --- */
+.modal {
+    display: none; position: fixed; z-index: 5000; left: 0; top: 0; width: 100%; height: 100%; 
+    background-color: rgba(0,0,0,0.3); backdrop-filter: blur(2px); animation: fadeIn 0.3s;
+}
+.modal-content {
+    background-color: #fff; margin: 8% auto; padding: 25px 40px; 
+    border-radius: 16px; width: 60%; max-width: 600px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.2); position: relative; max-height: 70vh; overflow-y: auto;
+}
+.close-modal { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+.close-modal:hover { color: black; }
+
+@keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
+
+/* --- Label Text --- */
+text.label-text {
+    font-size: 16px; 
+    font-family: 'Segoe UI', sans-serif;
+    fill: #263238; 
+    font-weight: bold; 
+    cursor: pointer; 
+    user-select: none;
+    text-anchor: middle; 
+    dominant-baseline: central; 
+    
+    /* ขอบขาวหนาๆ เพื่อให้จิ้มง่าย */
+    stroke: rgba(255,255,255,0.9); 
+    stroke-width: 8px; /* เพิ่มความหนาของ Hitbox */
+    paint-order: stroke; 
+    stroke-linejoin: round;
+    
+    pointer-events: all; /* รับการคลิกแน่นอน */
+    transition: fill 0.2s; /* ลบ transform ออก */
+}
+text.label-text:hover {
+    fill: #d32f2f; /* เปลี่ยนแค่สีพอ ไม่ต้องขยาย */
+    stroke: #fff;  /* ปรับสีขอบนิดหน่อย */
+    /* transform: scale(1.1); <--- ตัวการที่ทำให้เด้ง ลบออกไปแล้ว */
+}
+
+body.panning { cursor: grabbing; }
+body.panning .uml-class, body.panning path.connection, body.panning circle.conn-handle, body.panning text.label-text { pointer-events: none; }
+
+/* --- Floating Input Glass UI --- */
+#floating-input {
+    position: absolute; display: none; z-index: 9999;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(8px);
+    border: 2px solid #2196F3; border-radius: 8px;
+    padding: 6px 10px; font-family: 'Segoe UI', sans-serif;
+    font-size: 14px; font-weight: bold; color: #333;
+    text-align: center; box-shadow: 0 8px 20px rgba(33, 150, 243, 0.2);
+    outline: none;
+    transform: translate(-50%, -50%) scale(0.9);
+    transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.1s ease;
+    opacity: 0;
+}
+#floating-input.active { opacity: 1; transform: translate(-50%, -50%) scale(1); }

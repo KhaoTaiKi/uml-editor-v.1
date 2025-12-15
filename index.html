@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UML Editor V25 (Glass UI)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="toolbar">
+        <button id="btn-move" class="active" onclick="setMode('move')">🖐 Move</button>
+        <button class="add-btn" onclick="addClass()">+ Class</button>
+        <div class="separator"></div>
+        
+        <button id="btn-association" onclick="setMode('connect', 'association')">🔗 Assoc</button>
+        <button id="btn-inheritance" onclick="setMode('connect', 'inheritance')">▷ Inherit</button>
+        <button id="btn-aggregation" onclick="setMode('connect', 'aggregation')">◇ Aggreg</button>
+        <button id="btn-composition" onclick="setMode('connect', 'composition')">◆ Compo</button>
+        
+        <div class="separator"></div>
+        <button id="btn-delete-mode" onclick="setMode('delete')">🧽 Eraser</button>
+        <button class="clear-btn" onclick="clearAll()">🗑 Clear All</button>
+        
+        <div class="separator"></div>
+        <button id="btn-help" onclick="toggleHelp()">📘 Help</button>
+    </div>
+
+    <div id="status-msg"></div>
+
+    <div id="canvas">
+        <svg id="svg-layer">
+            <defs>
+                <marker id="marker-inheritance" markerWidth="14" markerHeight="14" refX="14" refY="7" orient="auto" markerUnits="userSpaceOnUse">
+                    <path d="M0,1 L14,7 L0,13 Z" fill="#fff" stroke="#455A64" stroke-width="1.5" />
+                </marker>
+                <marker id="marker-aggregation" markerWidth="16" markerHeight="16" refX="0" refY="8" orient="auto" markerUnits="userSpaceOnUse">
+                    <path d="M0,8 L8,0 L16,8 L8,16 Z" fill="#fff" stroke="#455A64" stroke-width="1.5" />
+                </marker>
+                <marker id="marker-composition" markerWidth="16" markerHeight="16" refX="0" refY="8" orient="auto" markerUnits="userSpaceOnUse">
+                    <path d="M0,8 L8,0 L16,8 L8,16 Z" fill="#455A64" stroke="#455A64" stroke-width="1" />
+                </marker>
+            </defs>
+        </svg>
+    </div>
+
+    <div id="context-menu">
+        <div class="menu-item" onclick="triggerAddAttribute()">+ Add Attribute</div>
+        <div class="menu-item" onclick="triggerAddMethod()">+ Add Method</div>
+        <div class="menu-item delete" onclick="triggerDeleteClass()">🗑 Delete Class</div>
+    </div>
+
+    <div id="help-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="toggleHelp()">&times;</span>
+            <h2>📘 คู่มือการใช้งาน UML Editor</h2>
+            <hr>
+            
+            <h3>1. การจัดการพื้นที่ (Workspace)</h3>
+            <ul>
+                <li><b>เลื่อนหน้าจอ (Pan):</b> คลิกขวาค้างที่พื้นที่ว่าง แล้วลากเพื่อขยับมุมมอง</li>
+                <li><b>ล้างหน้าจอ:</b> คลิกปุ่ม <code>🗑 Clear All</code> เพื่อลบทุกอย่าง</li>
+            </ul>
+
+            <h3>2. การจัดการคลาส (Class)</h3>
+            <ul>
+                <li><b>สร้างคลาส:</b> คลิกปุ่ม <code>+ Class</code></li>
+                <li><b>แก้ไขชื่อ:</b> ดับเบิ้ลคลิกที่ชื่อคลาส</li>
+                <li><b>เพิ่มข้อมูล:</b> คลิกขวาที่กล่องคลาส เพื่อเพิ่ม Attribute หรือ Method</li>
+                <li><b>ลบข้อมูลในคลาส:</b> ลบข้อความในบรรทัดนั้นให้หมด แล้วคลิกที่อื่นเพื่อลบทิ้ง</li>
+            </ul>
+
+            <h3>3. การเชื่อมโยงเส้น (Relations)</h3>
+            <ul>
+                <li><b>สร้างเส้น:</b> คลิกเลือกประเภทเส้น -> คลิกต้นทาง -> คลิกปลายทาง</li>
+                <li><b>แก้ไขตัวเลข (Multiplicity):</b> ดับเบิ้ลคลิกที่ตัวเลขบนเส้น (เช่น '1') เพื่อแก้ไข</li>
+                <li><b>ปรับแต่งเส้น:</b> ลากจุดจับบนเส้นไปแปะที่จุดสีฟ้า (Port) รอบๆ กล่องเพื่อล็อกตำแหน่ง</li>
+            </ul>
+
+            <h3>4. การลบ (Deleting)</h3>
+            <ul>
+                <li><b>ยางลบ:</b> เลือกโหมด <code>🧽 Eraser</code> แล้วคลิกสิ่งที่ต้องการลบ (กล่อง หรือ เส้น)</li>
+                <li><b>ลัด:</b> คลิกขวาที่กล่องเลือก <code>Delete Class</code> หรือ ดับเบิ้ลคลิกที่เส้นเพื่อลบ</li>
+            </ul>
+        </div>
+    </div>
+
+    <input type="text" id="floating-input" autocomplete="off">
+    
+    <script src="script.js"></script>
+</body>
+</html>
