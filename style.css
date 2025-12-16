@@ -70,73 +70,43 @@ body.dragging-handle circle.conn-handle { opacity: 1; }
 circle.conn-handle.start { fill: #4CAF50; }
 circle.conn-handle.end { fill: #F44336; }
 
-/* --- Snap Ports (แก้ไขตามที่ขอ: 10x5 px) --- */
+/* --- Hidden Ports (เราใช้ Border Snap แทนแล้ว) --- */
 .snap-port {
-    position: absolute;
-    background: #B0BEC5; 
-    border: 1px solid #546E7A;
-    border-radius: 1px;
-    transform: translate(-50%, -50%);
-    z-index: 20;
-    
-    /* เริ่มต้นซ่อน */
-    opacity: 0; 
-    pointer-events: none; 
-    transition: all 0.2s;
+    display: none !important;
 }
 
-/* โชว์แท็กเมื่อชี้ หรือ ลากเส้น */
-.uml-class:hover .snap-port,
-body.dragging-handle .snap-port {
-    opacity: 1;
-}
-
-/* สถานะตอนกำลังลากเส้น */
-body.dragging-handle .snap-port {
-    pointer-events: all;
-    background: #FFFFFF;
-    border-color: #2196F3;
-    cursor: crosshair;
-}
-
-/* กำหนดขนาดตามด้าน (Top/Bottom = นอน, Left/Right = ตั้ง) */
-.snap-port[data-side="top"],
-.snap-port[data-side="bottom"] {
-    width: 10px; 
-    height: 5px;
-}
-
-.snap-port[data-side="left"],
-.snap-port[data-side="right"] {
-    width: 5px; 
-    height: 10px;
-}
-
-/* สถานะดูดติด (Active) */
-.snap-port.active {
-    background: #2196F3 !important;
-    border-color: white !important;
-    box-shadow: 0 0 8px #2196F3;
-    z-index: 25;
-    transform: translate(-50%, -50%) scale(1.5); /* ขยายใหญ่ขึ้นตอนดูด */
-}
-
-/* --- Class Box --- */
+/* --- Class Box (Auto Size Logic) --- */
 .uml-class {
-    position: absolute; width: 180px; 
+    position: absolute; 
+    
+    /* กล่องยืดหดตามตัวอักษร */
+    min-width: 160px;        
+    width: fit-content;      
+    max-width: 400px;        
+    
     background: rgba(255, 255, 255, 0.95);
     border: 1px solid #90A4AE; 
-    border-radius: 12px; 
+    border-radius: 8px; 
     box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
     z-index: 10;
-    display: flex; flex-direction: column; overflow: hidden; transition: box-shadow 0.2s, transform 0.1s;
+    display: flex; flex-direction: column; overflow: hidden; 
+    transition: box-shadow 0.2s, border-color 0.2s; /* เอา transition width ออกเพื่อความลื่น */
 }
+
 .uml-class:hover { 
     box-shadow: 0 8px 25px rgba(0,0,0,0.15); 
     transform: translateY(-2px);
     cursor: grab; 
     border-color: #2196F3;
 }
+
+/* ตอนกำลังลากเส้น ถ้าเมาส์อยู่เหนือกล่อง ให้ขอบหนาขึ้นและเป็นสีเขียว */
+.uml-class.hover-target {
+    border: 3px solid #4CAF50;
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+    transform: translateY(0); /* ห้ามเด้งตอนจะเชื่อมเส้น */
+}
+
 .uml-class.source-selected { 
     border-color: #2196F3; 
     box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3); 
@@ -147,6 +117,8 @@ body.dragging-handle .snap-port {
     padding: 12px; text-align: center; font-weight: bold; 
     border-bottom: 1px solid #90A4AE; color: #263238; 
 }
+
+/* --- Attributes & Methods --- */
 .uml-attributes, .uml-methods { 
     background-color: transparent; 
     padding: 8px 12px; font-size: 13px; color: #37474F; 
@@ -157,9 +129,26 @@ body.dragging-handle .snap-port {
 .uml-attributes:empty, .uml-methods:empty { display: none; padding: 0; border: none; }
 .uml-class:has(.uml-attributes:empty):has(.uml-methods:empty) .uml-header { border-bottom: none; }
 
-.uml-item { margin-bottom: 4px; cursor: text; min-height: 18px; transition: background 0.1s; border-radius: 4px; padding: 0 4px; }
+/* จัดการข้อความยาวๆ ให้ไม่ล้น */
+.uml-item, .uml-header {
+    white-space: nowrap;      
+    overflow: hidden;         
+    text-overflow: ellipsis;  
+    padding-right: 15px;
+}
+
+.uml-item { margin-bottom: 4px; cursor: text; min-height: 18px; transition: background 0.1s; border-radius: 4px; padding: 2px 4px; }
 .uml-item:hover { background-color: rgba(33, 150, 243, 0.1); }
-[contenteditable="true"] { outline: 2px solid #2196F3; background: #fff; padding: 2px; cursor: text; border-radius: 4px; }
+
+[contenteditable="true"] { 
+    outline: 2px solid #2196F3; 
+    background: #fff; 
+    padding: 2px 5px; 
+    cursor: text; 
+    border-radius: 4px; 
+    min-width: 50px;
+    display: inline-block;
+}
 
 /* --- Context Menu --- */
 #context-menu {
@@ -227,37 +216,3 @@ body.panning .uml-class, body.panning path.connection, body.panning circle.conn-
     opacity: 0;
 }
 #floating-input.active { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-
-
-
-.snap-port {
-    display: none !important;
-}
-
-/* --- Class Box Effect --- */
-.uml-class {
-    position: absolute; width: 180px; 
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid #90A4AE; 
-    border-radius: 8px; /* ปรับมนน้อยลงนิดนึงเพื่อให้คำนวณขอบง่าย */
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
-    z-index: 10;
-    display: flex; flex-direction: column; overflow: hidden; 
-    transition: box-shadow 0.2s, border-color 0.2s;
-}
-
-.uml-class:hover { 
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15); 
-    border-color: #2196F3; /* เปลี่ยนสีขอบเมื่อเมาส์ชี้ */
-}
-
-/* ตอนกำลังลากเส้น ถ้าเมาส์อยู่เหนือกล่อง ให้ขอบหนาขึ้นและเป็นสีเขียว */
-.uml-class.hover-target {
-    border: 3px solid #4CAF50;
-    box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
-}
-
-.uml-class.source-selected { 
-    border-color: #2196F3; 
-    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3); 
-}
