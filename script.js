@@ -14,7 +14,7 @@ let isPanning = false;
 let startPan = { x: 0, y: 0 };
 let panOffset = { x: 0, y: 0 }; 
 
-// ตัวแปรสำหรับจำกัดรอบการทำงาน (Performance)
+// Performance Limiter
 let isFramePending = false; 
 
 const canvas = document.getElementById('canvas');
@@ -25,17 +25,20 @@ const helpModal = document.getElementById('help-modal');
 const floatInput = document.getElementById('floating-input');
 let editingLabel = null; 
 
-// --- Helper Functions ---
+// --- Helper: Toggle Modal ---
 function toggleHelp() { helpModal.style.display = (helpModal.style.display === "block") ? "none" : "block"; }
 window.onclick = function(event) { if (event.target == helpModal) helpModal.style.display = "none"; }
 
+// --- Panning Logic (หัวใจสำคัญ: ต้องขยับทั้ง SVG และ Class) ---
 window.addEventListener('mousedown', (e) => {
+    // คลิกขวาที่ว่างเพื่อ Pan
     if (e.button === 2 && mode === 'move' && !e.target.closest('.uml-class') && !e.target.closest('#context-menu')) {
         isPanning = true;
         startPan = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y };
         document.body.classList.add('panning');
     }
 });
+
 window.addEventListener('mousemove', (e) => {
     if (isPanning) {
         e.preventDefault();
@@ -44,13 +47,25 @@ window.addEventListener('mousemove', (e) => {
         applyPan();
     }
 });
+
 window.addEventListener('mouseup', () => {
-    isPanning = false; document.body.classList.remove('panning');
+    isPanning = false; 
+    document.body.classList.remove('panning');
 });
+
+// ฟังก์ชันขยับจอ (แก้บัคเส้นหลุดที่นี่)
 function applyPan() {
+    // 1. ขยับเลเยอร์เส้น (สำคัญมาก! ถ้าไม่มีบรรทัดนี้ เส้นจะอยู่ที่เดิม)
     svgLayer.style.transform = `translate(${panOffset.x}px, ${panOffset.y}px)`;
-    canvas.style.transform = `translate(${panOffset.x}px, ${panOffset.y}px)`;
+    
+    // 2. ขยับลายพื้นหลัง
     canvas.style.backgroundPosition = `${panOffset.x}px ${panOffset.y}px`;
+    
+    // 3. ขยับกล่อง Class ทุกกล่อง
+    document.querySelectorAll('.uml-class').forEach(el => {
+        el.style.transform = `translate(${panOffset.x}px, ${panOffset.y}px)`;
+    });
+    
     hideFloatInput();
 }
 
@@ -61,7 +76,7 @@ function addClass() {
     div.className = 'uml-class';
     div.id = 'class-' + classCounter;
     
-    // วางตรงกลางจอ (คำนึงถึง Pan ด้วย)
+    // คำนวณตำแหน่งกลางจอ (ต้องหักลบ Pan ออกเพื่อให้วางตรงกลาง Viewport จริงๆ)
     const viewW = window.innerWidth;
     const viewH = window.innerHeight;
     const centerX = (-panOffset.x + viewW / 2) - 90;
@@ -79,13 +94,20 @@ function addClass() {
     div.addEventListener('mousedown', onMouseDown);
     div.addEventListener('click', onClassClick);
     div.addEventListener('contextmenu', onRightClick);
+    
+    // Highlight Effect
     div.addEventListener('mouseenter', () => { if(draggedHandle) { div.classList.add('hover-target'); currentHoverClass = div; } });
     div.addEventListener('mouseleave', () => { div.classList.remove('hover-target'); if(currentHoverClass === div) currentHoverClass = null; });
 
     canvas.appendChild(div);
+    
+    // สำคัญ: สั่งให้กล่องใหม่รู้จักค่า Pan ปัจจุบันทันที
+    applyPan(); 
+
     if(mode !== 'delete') setMode('move');
 }
 
+// Placeholder functions (Compatibility)
 function initPorts(classEl) {} 
 function updatePortsPosition(classEl) {}
 
@@ -94,12 +116,16 @@ function onRightClick(e) {
     e.preventDefault(); if(isPanning) return; 
     rightClickedClassId = e.currentTarget.id;
     contextMenu.style.display = 'block';
-    contextMenu.style.left = (e.pageX - panOffset.x) + 'px';
-    contextMenu.style.top = (e.pageY - panOffset.y) + 'px';
+    // เมนูต้องไม่ขยับตาม Pan (ใช้ clientX/Y หรือหักลบให้ถูก)
+    // แต่วิธีง่ายคือวางตามเมาส์หน้าจอ
+    contextMenu.style.left = e.pageX + 'px'; 
+    contextMenu.style.top = e.pageY + 'px';
 }
 document.addEventListener('click', e => { if (e.button !== 2) contextMenu.style.display = 'none'; });
+
 function triggerAddAttribute() { addClassItem('.uml-attributes', '- attribute'); }
 function triggerAddMethod() { addClassItem('.uml-methods', '+ method()'); }
+
 function addClassItem(selector, text) {
     if (!rightClickedClassId) return;
     const classEl = document.getElementById(rightClickedClassId);
@@ -111,6 +137,7 @@ function addClassItem(selector, text) {
     enableEdit(item); 
     scheduleUpdate();
 }
+
 function triggerDeleteClass() { 
     if(rightClickedClassId) { deleteClass(rightClickedClassId); rightClickedClassId = null; }
 }
@@ -155,16 +182,14 @@ function onClassClick(e) {
 
 function deleteClass(classId) {
     const el = document.getElementById(classId); if(el) el.remove();
-    // ลบการเชื่อมต่อที่เกี่ยวข้อง
     const toRemove = connections.filter(c => c.from === classId || c.to === classId);
-    toRemove.forEach(c => deleteConnection(c, true)); // true = ไม่ต้อง filter array ซ้ำ
+    toRemove.forEach(c => deleteConnection(c, true));
     connections = connections.filter(c => c.from !== classId && c.to !== classId);
-    
     if (rightClickedClassId === classId) rightClickedClassId = null;
     scheduleUpdate();
 }
 
-// --- Lines ---
+// --- Create Lines ---
 function createLine(sourceId, targetId, type) {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('class', 'connection');
@@ -222,6 +247,7 @@ function showFloatInput(e, labelEl) {
     editingLabel = labelEl;
     floatInput.value = labelEl.textContent;
     floatInput.style.display = 'block';
+    // แสดง Input ตรงตำแหน่งเมาส์ (ไม่ต้องหัก Pan เพราะ Input เป็น position:absolute ทับหน้าจอ)
     floatInput.style.left = e.clientX + 'px';
     floatInput.style.top = e.clientY + 'px';
     setTimeout(() => { floatInput.classList.add('active'); floatInput.focus(); floatInput.select(); }, 10);
@@ -267,19 +293,24 @@ function setupHandleDrag(handle, conn, isStart) {
 
 function onHandleMouseMove(e) {
     if(!draggedHandle) return;
+    
+    // แปลงพิกัดเมาส์ (Screen) ให้เป็นพิกัดตรรกะ (Logical) โดยการหักค่า Pan ออก
     const mx = e.clientX - panOffset.x;
     const my = e.clientY - panOffset.y;
+    
     let drawX = mx, drawY = my;
 
     if(currentHoverClass) {
+        // Snap เข้าหาขอบ
         const rect = getRect(currentHoverClass);
         const closest = getClosestPointOnRectBorder(rect, mx, my);
         drawX = closest.x; drawY = closest.y;
     }
+    
+    // ตั้งค่าตำแหน่ง Handle (ใน SVG ที่ถูก Transform แล้ว)
     draggedHandle.handle.setAttribute('cx', drawX);
     draggedHandle.handle.setAttribute('cy', drawY);
     
-    // ใช้ Visual Feedback แบบง่าย เพื่อความลื่นไหล
     updateSingleLineManual(draggedHandle.conn, drawX, drawY, draggedHandle.isStart);
 }
 
@@ -298,25 +329,37 @@ function onHandleMouseUp(e) {
     scheduleUpdate();
 }
 
-// --- Optimized Dragging Class ---
+// --- Dragging Class ---
 function onMouseDown(e) {
     if (e.target.isContentEditable || mode !== 'move' || e.button === 2) return; 
     draggedElement = e.currentTarget;
     document.querySelectorAll('.uml-class').forEach(el => el.style.zIndex = 10);
     draggedElement.style.zIndex = 100;
-    const mouseX = e.clientX - panOffset.x; const mouseY = e.clientY - panOffset.y;
-    const rectX = parseFloat(draggedElement.style.left); const rectY = parseFloat(draggedElement.style.top);
-    offset.x = mouseX - rectX; offset.y = mouseY - rectY;
+    
+    // คำนวณเมาส์แบบ Logical
+    const mouseX = e.clientX - panOffset.x; 
+    const mouseY = e.clientY - panOffset.y;
+    
+    // อ่านค่า Left/Top (เป็น Logical อยู่แล้ว)
+    const rectX = parseFloat(draggedElement.style.left); 
+    const rectY = parseFloat(draggedElement.style.top);
+    
+    offset.x = mouseX - rectX; 
+    offset.y = mouseY - rectY;
+    
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
 }
 
 function onMouseMove(e) {
     if (!draggedElement) return;
-    const mouseX = e.clientX - panOffset.x; const mouseY = e.clientY - panOffset.y;
+    const mouseX = e.clientX - panOffset.x; 
+    const mouseY = e.clientY - panOffset.y;
+    
     draggedElement.style.left = (mouseX - offset.x) + 'px';
     draggedElement.style.top = (mouseY - offset.y) + 'px';
-    scheduleUpdate(); // ใช้ตัวช่วยจัดการ Frame Rate
+    
+    scheduleUpdate();
 }
 
 function onMouseUp() {
@@ -325,7 +368,7 @@ function onMouseUp() {
     window.removeEventListener('mouseup', onMouseUp);
 }
 
-// --- Performance Updater (แก้บัคเส้นค้าง) ---
+// --- Performance Updater ---
 function scheduleUpdate() {
     if (!isFramePending) {
         isFramePending = true;
@@ -336,7 +379,7 @@ function scheduleUpdate() {
     }
 }
 
-// --- MAIN LOGIC ---
+// --- Main Line Logic ---
 function updateLines() {
     const classConnections = {}; 
     const ensureClassEntry = (id) => {
@@ -390,7 +433,6 @@ function updateLines() {
         });
     });
 
-    // เตรียมข้อมูลกล่องทั้งหมดครั้งเดียว (ลดภาระ CPU)
     const allRects = Array.from(document.querySelectorAll('.uml-class')).map(el => ({
         id: el.id, ...getRect(el)
     }));
@@ -442,7 +484,6 @@ function getSmartPath(p1, p2, side1, side2, obstacles, id1, id2) {
              const yEnter = (side2 === 'bottom') ? p2.y + 20 : p2.y - 20;
              return `M ${p1.x} ${p1.y} L ${p1.x} ${yExit} L ${midX} ${yExit} L ${midX} ${yEnter} L ${p2.x} ${yEnter} L ${p2.x} ${p2.y}`;
         }
-        
     } else {
         blockers.forEach(rect => {
              if (rect.right > minX && rect.left < maxX) {
