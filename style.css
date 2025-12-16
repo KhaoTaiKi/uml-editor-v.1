@@ -6,12 +6,10 @@ body {
 /* --- Glass Toolbar --- */
 #toolbar {
     position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-    /* พื้นหลังแบบกระจกใส */
     background: rgba(255, 255, 255, 0.65); 
     backdrop-filter: blur(12px); 
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.5);
-    
     padding: 10px 20px; border-radius: 50px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); 
     z-index: 1000;
@@ -22,8 +20,8 @@ body {
 
 button {
     padding: 8px 15px; cursor: pointer; 
-    border: 1px solid transparent; /* ซ่อนขอบปกติ */
-    background: rgba(255, 255, 255, 0.5); /* ปุ่มใสๆ */
+    border: 1px solid transparent; 
+    background: rgba(255, 255, 255, 0.5); 
     border-radius: 25px; font-size: 13px; font-weight: 600; color: #444;
     transition: all 0.2s; display: flex; align-items: center; gap: 5px; white-space: nowrap;
 }
@@ -47,7 +45,6 @@ button#btn-help:hover { background-color: #546E7A; }
 
 #canvas {
     width: 100vw; height: 100vh; position: relative;
-    /* Grid ให้ดูนวลขึ้น */
     background-image: linear-gradient(#e0e0e0 1px, transparent 1px), linear-gradient(90deg, #e0e0e0 1px, transparent 1px);
     background-size: 40px 40px;
 }
@@ -57,7 +54,7 @@ path.connection {
     stroke: #546E7A; stroke-width: 2px; fill: none; 
     pointer-events: visibleStroke; 
     cursor: pointer; transition: stroke 0.2s;
-    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1)); /* เงาเส้นนิดๆ */
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1)); 
 }
 path.connection:hover { stroke: #2196F3; stroke-width: 4px; }
 
@@ -73,25 +70,64 @@ body.dragging-handle circle.conn-handle { opacity: 1; }
 circle.conn-handle.start { fill: #4CAF50; }
 circle.conn-handle.end { fill: #F44336; }
 
+/* --- Snap Ports (แก้ไขตามที่ขอ: 10x5 px) --- */
 .snap-port {
-    position: absolute; width: 8px; height: 8px; 
-    background: transparent; border-radius: 50%;
-    transform: translate(-50%, -50%); z-index: 20; pointer-events: none; 
-}
-body.dragging-handle .snap-port { background: rgba(33, 150, 243, 0.3); pointer-events: all; }
-.snap-port.active { 
-    width: 14px; height: 14px; 
-    background: #2196F3; border: 3px solid white;
-    box-shadow: 0 0 10px rgba(33, 150, 243, 0.6); opacity: 1;
+    position: absolute;
+    background: #B0BEC5; 
+    border: 1px solid #546E7A;
+    border-radius: 1px;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    
+    /* เริ่มต้นซ่อน */
+    opacity: 0; 
+    pointer-events: none; 
+    transition: all 0.2s;
 }
 
-/* --- Class Box สไตล์ Modern --- */
+/* โชว์แท็กเมื่อชี้ หรือ ลากเส้น */
+.uml-class:hover .snap-port,
+body.dragging-handle .snap-port {
+    opacity: 1;
+}
+
+/* สถานะตอนกำลังลากเส้น */
+body.dragging-handle .snap-port {
+    pointer-events: all;
+    background: #FFFFFF;
+    border-color: #2196F3;
+    cursor: crosshair;
+}
+
+/* กำหนดขนาดตามด้าน (Top/Bottom = นอน, Left/Right = ตั้ง) */
+.snap-port[data-side="top"],
+.snap-port[data-side="bottom"] {
+    width: 10px; 
+    height: 5px;
+}
+
+.snap-port[data-side="left"],
+.snap-port[data-side="right"] {
+    width: 5px; 
+    height: 10px;
+}
+
+/* สถานะดูดติด (Active) */
+.snap-port.active {
+    background: #2196F3 !important;
+    border-color: white !important;
+    box-shadow: 0 0 8px #2196F3;
+    z-index: 25;
+    transform: translate(-50%, -50%) scale(1.5); /* ขยายใหญ่ขึ้นตอนดูด */
+}
+
+/* --- Class Box --- */
 .uml-class {
     position: absolute; width: 180px; 
-    background: rgba(255, 255, 255, 0.95); /* เกือบๆ ใส */
+    background: rgba(255, 255, 255, 0.95);
     border: 1px solid #90A4AE; 
-    border-radius: 12px; /* โค้งมน */
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1); /* เงานุ่มๆ */
+    border-radius: 12px; 
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
     z-index: 10;
     display: flex; flex-direction: column; overflow: hidden; transition: box-shadow 0.2s, transform 0.1s;
 }
@@ -125,7 +161,7 @@ body.dragging-handle .snap-port { background: rgba(33, 150, 243, 0.3); pointer-e
 .uml-item:hover { background-color: rgba(33, 150, 243, 0.1); }
 [contenteditable="true"] { outline: 2px solid #2196F3; background: #fff; padding: 2px; cursor: text; border-radius: 4px; }
 
-/* --- Glass Context Menu --- */
+/* --- Context Menu --- */
 #context-menu {
     position: absolute; display: none; 
     background: rgba(255, 255, 255, 0.9);
@@ -163,29 +199,15 @@ body.dragging-handle .snap-port { background: rgba(33, 150, 243, 0.3); pointer-e
 
 /* --- Label Text --- */
 text.label-text {
-    font-size: 16px; 
-    font-family: 'Segoe UI', sans-serif;
-    fill: #263238; 
-    font-weight: bold; 
-    cursor: pointer; 
-    user-select: none;
-    text-anchor: middle; 
-    dominant-baseline: central; 
+    font-size: 16px; font-family: 'Segoe UI', sans-serif;
+    fill: #263238; font-weight: bold; cursor: pointer; user-select: none;
+    text-anchor: middle; dominant-baseline: central; 
     
-    /* ขอบขาวหนาๆ เพื่อให้จิ้มง่าย */
-    stroke: rgba(255,255,255,0.9); 
-    stroke-width: 8px; /* เพิ่มความหนาของ Hitbox */
-    paint-order: stroke; 
-    stroke-linejoin: round;
+    stroke: rgba(255,255,255,0.9); stroke-width: 8px; paint-order: stroke; stroke-linejoin: round;
     
-    pointer-events: all; /* รับการคลิกแน่นอน */
-    transition: fill 0.2s; /* ลบ transform ออก */
+    pointer-events: all; transition: fill 0.2s;
 }
-text.label-text:hover {
-    fill: #d32f2f; /* เปลี่ยนแค่สีพอ ไม่ต้องขยาย */
-    stroke: #fff;  /* ปรับสีขอบนิดหน่อย */
-    /* transform: scale(1.1); <--- ตัวการที่ทำให้เด้ง ลบออกไปแล้ว */
-}
+text.label-text:hover { fill: #d32f2f; stroke: #fff; }
 
 body.panning { cursor: grabbing; }
 body.panning .uml-class, body.panning path.connection, body.panning circle.conn-handle, body.panning text.label-text { pointer-events: none; }
@@ -205,3 +227,37 @@ body.panning .uml-class, body.panning path.connection, body.panning circle.conn-
     opacity: 0;
 }
 #floating-input.active { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+
+
+.snap-port {
+    display: none !important;
+}
+
+/* --- Class Box Effect --- */
+.uml-class {
+    position: absolute; width: 180px; 
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #90A4AE; 
+    border-radius: 8px; /* ปรับมนน้อยลงนิดนึงเพื่อให้คำนวณขอบง่าย */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+    z-index: 10;
+    display: flex; flex-direction: column; overflow: hidden; 
+    transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.uml-class:hover { 
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15); 
+    border-color: #2196F3; /* เปลี่ยนสีขอบเมื่อเมาส์ชี้ */
+}
+
+/* ตอนกำลังลากเส้น ถ้าเมาส์อยู่เหนือกล่อง ให้ขอบหนาขึ้นและเป็นสีเขียว */
+.uml-class.hover-target {
+    border: 3px solid #4CAF50;
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+}
+
+.uml-class.source-selected { 
+    border-color: #2196F3; 
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3); 
+}

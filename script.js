@@ -8,41 +8,34 @@ let classCounter = 0;
 let rightClickedClassId = null;
 
 let draggedHandle = null; 
-let currentSnapPort = null;
+let currentHoverClass = null; 
 
-// --- Panning Variables ---
 let isPanning = false;
 let startPan = { x: 0, y: 0 };
 let panOffset = { x: 0, y: 0 }; 
+
+// ตัวแปรสำหรับจำกัดรอบการทำงาน (Performance)
+let isFramePending = false; 
 
 const canvas = document.getElementById('canvas');
 const svgLayer = document.getElementById('svg-layer');
 const statusMsg = document.getElementById('status-msg');
 const contextMenu = document.getElementById('context-menu');
 const helpModal = document.getElementById('help-modal');
-
-// --- NEW: Floating Input Element ---
 const floatInput = document.getElementById('floating-input');
-let editingLabel = null; // เก็บว่ากำลังแก้ Label ตัวไหนอยู่
+let editingLabel = null; 
 
-// --- Helper: Toggle Modal ---
-function toggleHelp() {
-    helpModal.style.display = (helpModal.style.display === "block") ? "none" : "block";
-}
-window.onclick = function(event) {
-    if (event.target == helpModal) helpModal.style.display = "none";
-}
+// --- Helper Functions ---
+function toggleHelp() { helpModal.style.display = (helpModal.style.display === "block") ? "none" : "block"; }
+window.onclick = function(event) { if (event.target == helpModal) helpModal.style.display = "none"; }
 
-// --- Panning Logic ---
 window.addEventListener('mousedown', (e) => {
-    // ถ้าคลิกขวาที่ว่าง หรือคลิกซ้ายเพื่อลาก (แต่ต้องไม่อยู่ในโหมดแก้ Text)
     if (e.button === 2 && mode === 'move' && !e.target.closest('.uml-class') && !e.target.closest('#context-menu')) {
         isPanning = true;
         startPan = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y };
         document.body.classList.add('panning');
     }
 });
-
 window.addEventListener('mousemove', (e) => {
     if (isPanning) {
         e.preventDefault();
@@ -51,38 +44,33 @@ window.addEventListener('mousemove', (e) => {
         applyPan();
     }
 });
-
 window.addEventListener('mouseup', () => {
-    if (isPanning) {
-        isPanning = false;
-        document.body.classList.remove('panning');
-    }
+    isPanning = false; document.body.classList.remove('panning');
 });
-
 function applyPan() {
     svgLayer.style.transform = `translate(${panOffset.x}px, ${panOffset.y}px)`;
-    canvas.style.backgroundPosition = `${panOffset.x}px ${panOffset.y}px`;
-    
-    // Canvas transform (ระวัง Toolbar ถ้ามันอยู่ในนี้ แต่ HTML นี้ Toolbar อยู่นอก)
     canvas.style.transform = `translate(${panOffset.x}px, ${panOffset.y}px)`;
-    
-    // ซ่อน Input ถ้ามีการเลื่อนจอ
+    canvas.style.backgroundPosition = `${panOffset.x}px ${panOffset.y}px`;
     hideFloatInput();
 }
 
-// --- Class & Ports ---
+// --- Class Functions ---
 function addClass() {
     classCounter++;
     const div = document.createElement('div');
     div.className = 'uml-class';
     div.id = 'class-' + classCounter;
     
-    const centerX = (-panOffset.x + window.innerWidth / 2) - 90;
-    const centerY = (-panOffset.y + window.innerHeight / 2) - 50;
+    // วางตรงกลางจอ (คำนึงถึง Pan ด้วย)
+    const viewW = window.innerWidth;
+    const viewH = window.innerHeight;
+    const centerX = (-panOffset.x + viewW / 2) - 90;
+    const centerY = (-panOffset.y + viewH / 2) - 50;
     
     div.style.left = centerX + 'px';
     div.style.top = centerY + 'px';
     div.style.zIndex = 10;
+    
     div.innerHTML = `
         <div class="uml-header" ondblclick="enableEdit(this)">Class ${classCounter}</div>
         <div class="uml-attributes"></div>
@@ -91,85 +79,40 @@ function addClass() {
     div.addEventListener('mousedown', onMouseDown);
     div.addEventListener('click', onClassClick);
     div.addEventListener('contextmenu', onRightClick);
+    div.addEventListener('mouseenter', () => { if(draggedHandle) { div.classList.add('hover-target'); currentHoverClass = div; } });
+    div.addEventListener('mouseleave', () => { div.classList.remove('hover-target'); if(currentHoverClass === div) currentHoverClass = null; });
+
     canvas.appendChild(div);
-    initPorts(div); 
     if(mode !== 'delete') setMode('move');
 }
 
-function initPorts(classEl) {
-    for(let i=0; i<12; i++) {
-        const p = document.createElement('div');
-        p.className = 'snap-port';
-        p.dataset.portIndex = i;
-        classEl.appendChild(p);
-    }
-    updatePortsPosition(classEl);
-}
+function initPorts(classEl) {} 
+function updatePortsPosition(classEl) {}
 
-function updatePortsPosition(classEl) {
-    if(!classEl) return;
-    const w = classEl.offsetWidth;
-    const h = classEl.offsetHeight;
-    const ports = classEl.querySelectorAll('.snap-port');
-    const coords = [
-        {x: w*0.25, y:0, s:'top'}, {x: w*0.5, y:0, s:'top'}, {x: w*0.75, y:0, s:'top'},       
-        {x: w, y: h*0.25, s:'right'}, {x: w, y: h*0.5, s:'right'}, {x: w, y: h*0.75, s:'right'},    
-        {x: w*0.75, y:h, s:'bottom'}, {x: w*0.5, y:h, s:'bottom'}, {x: w*0.25, y:h, s:'bottom'},       
-        {x: 0, y: h*0.75, s:'left'}, {x: 0, y: h*0.5, s:'left'}, {x: 0, y: h*0.25, s:'left'}     
-    ];
-    ports.forEach((p, i) => {
-        if(coords[i]) {
-            p.style.left = coords[i].x + 'px';
-            p.style.top = coords[i].y + 'px';
-            p.dataset.side = coords[i].s; 
-        }
-    });
-}
-
-// --- Menu ---
+// --- Menu Functions ---
 function onRightClick(e) {
-    e.preventDefault();
-    if(isPanning) return; 
-
+    e.preventDefault(); if(isPanning) return; 
     rightClickedClassId = e.currentTarget.id;
     contextMenu.style.display = 'block';
     contextMenu.style.left = (e.pageX - panOffset.x) + 'px';
     contextMenu.style.top = (e.pageY - panOffset.y) + 'px';
 }
-document.addEventListener('click', e => { 
-    if (e.button !== 2) contextMenu.style.display = 'none'; 
-});
-
+document.addEventListener('click', e => { if (e.button !== 2) contextMenu.style.display = 'none'; });
 function triggerAddAttribute() { addClassItem('.uml-attributes', '- attribute'); }
 function triggerAddMethod() { addClassItem('.uml-methods', '+ method()'); }
-
 function addClassItem(selector, text) {
     if (!rightClickedClassId) return;
-    
-    // 1. เพิ่มข้อมูลใหม่เข้าไป
     const classEl = document.getElementById(rightClickedClassId);
     const container = classEl.querySelector(selector);
     const item = document.createElement('div');
     item.className = 'uml-item'; item.innerText = text;
     item.setAttribute('ondblclick', 'enableEdit(this)');
     container.appendChild(item);
-    
-    // 2. เปิดโหมดแก้ไข
     enableEdit(item); 
-    
-    // --- แก้ไขตรงนี้: สั่งอัปเดตตำแหน่ง Port ใหม่ทันทีหลังจากกล่องขยาย ---
-    // ใช้ requestAnimationFrame เพื่อรอให้ Browser วาดกล่องที่ขยายแล้วเสร็จก่อน
-    requestAnimationFrame(() => {
-        updatePortsPosition(classEl); // คำนวณจุดเชื่อมใหม่ตามความสูงใหม่
-        updateLines();                // วาดเส้นใหม่ตามจุดใหม่
-    });
+    scheduleUpdate();
 }
-
 function triggerDeleteClass() { 
-    if(rightClickedClassId) {
-        deleteClass(rightClickedClassId);
-        rightClickedClassId = null;
-    }
+    if(rightClickedClassId) { deleteClass(rightClickedClassId); rightClickedClassId = null; }
 }
 
 // --- Modes ---
@@ -182,14 +125,12 @@ function setMode(newMode, type = null) {
     
     if (mode === 'move') {
         document.getElementById('btn-move').classList.add('active');
-        statusMsg.style.display = 'none'; canvas.style.cursor = 'default';
+        canvas.style.cursor = 'default';
     } else if (mode === 'delete') {
         document.getElementById('btn-delete-mode').classList.add('active');
         document.body.classList.add('mode-delete');
-        statusMsg.style.display = 'block'; statusMsg.innerText = `[Eraser] คลิกเพื่อลบ`;
     } else {
         document.getElementById('btn-' + currentType).classList.add('active');
-        statusMsg.style.display = 'block'; statusMsg.innerText = `[${currentType}] เลือกต้นทาง`;
         canvas.style.cursor = 'crosshair';
     }
 }
@@ -198,9 +139,7 @@ function onClassClick(e) {
     if (e.target.isContentEditable) return;
     e.stopPropagation();
     const targetId = e.currentTarget.id;
-    
     if (mode === 'delete') { deleteClass(targetId); return; }
-    
     if (mode === 'connect') {
         if (!selectedSource) {
             selectedSource = targetId;
@@ -216,18 +155,17 @@ function onClassClick(e) {
 
 function deleteClass(classId) {
     const el = document.getElementById(classId); if(el) el.remove();
+    // ลบการเชื่อมต่อที่เกี่ยวข้อง
     const toRemove = connections.filter(c => c.from === classId || c.to === classId);
-    toRemove.forEach(c => deleteConnection(c, true));
+    toRemove.forEach(c => deleteConnection(c, true)); // true = ไม่ต้อง filter array ซ้ำ
     connections = connections.filter(c => c.from !== classId && c.to !== classId);
+    
     if (rightClickedClassId === classId) rightClickedClassId = null;
-    updateLines();
+    scheduleUpdate();
 }
 
+// --- Lines ---
 function createLine(sourceId, targetId, type) {
-    // Default values
-    let startText = "1";
-    let endText = "1";
-
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('class', 'connection');
     if (type === 'inheritance') path.setAttribute('marker-end', 'url(#marker-inheritance)');
@@ -236,15 +174,13 @@ function createLine(sourceId, targetId, type) {
     
     const startHandle = createHandle('start');
     const endHandle = createHandle('end');
-    const startLabel = createLabel(startText);
-    const endLabel = createLabel(endText);
+    const startLabel = createLabel("1");
+    const endLabel = createLabel("1");
 
     const connObj = { 
         from: sourceId, to: targetId, pathElement: path, type: type,
         startHandle: startHandle, endHandle: endHandle,
-        startLabel: startLabel, endLabel: endLabel,
-        fromPortIndex: null, toPortIndex: null,
-        startSide: null, endSide: null
+        startLabel: startLabel, endLabel: endLabel
     };
     
     setupHandleDrag(startHandle, connObj, true);
@@ -252,11 +188,6 @@ function createLine(sourceId, targetId, type) {
 
     path.addEventListener('click', (e) => {
         if (mode === 'delete') { e.stopPropagation(); deleteConnection(connObj); }
-    });
-    path.addEventListener('dblclick', (e) => {
-        e.stopPropagation();
-        connObj.fromPortIndex = null; connObj.toPortIndex = null;
-        updateLines();
     });
 
     svgLayer.appendChild(path);
@@ -266,7 +197,7 @@ function createLine(sourceId, targetId, type) {
     svgLayer.appendChild(endLabel);
     
     connections.push(connObj);
-    updateLines();
+    scheduleUpdate();
 }
 
 function createHandle(type) {
@@ -275,79 +206,40 @@ function createHandle(type) {
     return c;
 }
 
-// --- NEW: Create Label with Floating Input Trigger ---
 function createLabel(text) {
     const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     t.setAttribute('class', 'label-text');
     t.textContent = text;
-    
-    // Prevent click through
     t.addEventListener('mousedown', (e) => e.stopPropagation());
     t.addEventListener('click', (e) => e.stopPropagation());
-
-    // Double click to Activate Floating Input
     t.addEventListener('dblclick', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        showFloatInput(e, t);
+        e.stopPropagation(); e.preventDefault(); showFloatInput(e, t);
     });
     return t;
 }
 
-// --- NEW: Floating Input Logic ---
 function showFloatInput(e, labelEl) {
     editingLabel = labelEl;
-    
-    // ตั้งค่า Input
     floatInput.value = labelEl.textContent;
     floatInput.style.display = 'block';
-    
-    // วางตำแหน่ง Input
     floatInput.style.left = e.clientX + 'px';
     floatInput.style.top = e.clientY + 'px';
-    
-    // บังคับให้ browser วาด UI ใหม่ก่อนจะสั่ง Animation
-    setTimeout(() => {
-        floatInput.classList.add('active');
-        floatInput.focus(); // บังคับ Focus
-        floatInput.select(); // เลือกข้อความทั้งหมด
-    }, 10);
+    setTimeout(() => { floatInput.classList.add('active'); floatInput.focus(); floatInput.select(); }, 10);
 }
-
 function hideFloatInput() {
     floatInput.classList.remove('active');
-    setTimeout(() => {
-        if(!floatInput.classList.contains('active')) {
-            floatInput.style.display = 'none';
-        }
-    }, 100);
+    setTimeout(() => { if(!floatInput.classList.contains('active')) floatInput.style.display = 'none'; }, 100);
     editingLabel = null;
 }
-
-// Save logic when Enter or Blur
 function saveFloatInput() {
     if (editingLabel && floatInput.style.display !== 'none') {
         const val = floatInput.value.trim();
-        if(val !== "") {
-            editingLabel.textContent = val;
-        }
+        if(val !== "") editingLabel.textContent = val;
         hideFloatInput();
     }
 }
-
-// Event Listeners for Floating Input
-floatInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        saveFloatInput();
-    } else if (e.key === 'Escape') {
-        hideFloatInput();
-    }
-});
-// ถ้าคลิกข้างนอก Input ให้ Save
-floatInput.addEventListener('blur', () => {
-    saveFloatInput();
-});
-
+floatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveFloatInput(); else if (e.key === 'Escape') hideFloatInput(); });
+floatInput.addEventListener('blur', saveFloatInput);
 
 function deleteConnection(conn, skipArrayFilter = false) {
     svgLayer.removeChild(conn.pathElement);
@@ -357,11 +249,11 @@ function deleteConnection(conn, skipArrayFilter = false) {
     if(conn.endLabel) svgLayer.removeChild(conn.endLabel);
     if(!skipArrayFilter) {
         connections = connections.filter(c => c !== conn);
-        updateLines();
+        scheduleUpdate();
     }
 }
 
-// --- Magnetic & Dragging ---
+// --- Dragging Handle ---
 function setupHandleDrag(handle, conn, isStart) {
     handle.addEventListener('mousedown', (e) => {
         if(mode !== 'move') return;
@@ -375,294 +267,256 @@ function setupHandleDrag(handle, conn, isStart) {
 
 function onHandleMouseMove(e) {
     if(!draggedHandle) return;
-    document.querySelectorAll('.snap-port.active').forEach(p => p.classList.remove('active'));
-    currentSnapPort = null;
-
-    const targetClassId = draggedHandle.isStart ? draggedHandle.conn.from : draggedHandle.conn.to;
-    const classEl = document.getElementById(targetClassId);
-    
     const mx = e.clientX - panOffset.x;
     const my = e.clientY - panOffset.y;
-    let drawX, drawY;
-    
-    const nearest = findNearestPort(mx, my, classEl); 
+    let drawX = mx, drawY = my;
 
-    if (nearest) {
-        currentSnapPort = nearest;
-        currentSnapPort.element.classList.add('active');
-        const portEl = currentSnapPort.element;
-        const classEl = portEl.closest('.uml-class');
-        
-        drawX = parseFloat(classEl.style.left) + parseFloat(portEl.style.left);
-        drawY = parseFloat(classEl.style.top) + parseFloat(portEl.style.top);
-    } else {
-        drawX = mx;
-        drawY = my;
+    if(currentHoverClass) {
+        const rect = getRect(currentHoverClass);
+        const closest = getClosestPointOnRectBorder(rect, mx, my);
+        drawX = closest.x; drawY = closest.y;
     }
-    
     draggedHandle.handle.setAttribute('cx', drawX);
     draggedHandle.handle.setAttribute('cy', drawY);
+    
+    // ใช้ Visual Feedback แบบง่าย เพื่อความลื่นไหล
     updateSingleLineManual(draggedHandle.conn, drawX, drawY, draggedHandle.isStart);
 }
 
 function onHandleMouseUp(e) {
     if(!draggedHandle) return;
     document.body.classList.remove('dragging-handle');
-    if(currentSnapPort) currentSnapPort.element.classList.remove('active');
-
-    if(currentSnapPort) {
-        if(draggedHandle.isStart) draggedHandle.conn.fromPortIndex = currentSnapPort.index;
-        else draggedHandle.conn.toPortIndex = currentSnapPort.index;
-    } else {
-        if(draggedHandle.isStart) draggedHandle.conn.fromPortIndex = null;
-        else draggedHandle.conn.toPortIndex = null;
+    if(currentHoverClass) {
+        if(draggedHandle.isStart) draggedHandle.conn.from = currentHoverClass.id;
+        else draggedHandle.conn.to = currentHoverClass.id;
+        currentHoverClass.classList.remove('hover-target');
+        currentHoverClass = null;
     }
-
-    draggedHandle = null; currentSnapPort = null;
+    draggedHandle = null;
     window.removeEventListener('mousemove', onHandleMouseMove);
     window.removeEventListener('mouseup', onHandleMouseUp);
-    updateLines();
+    scheduleUpdate();
 }
 
-function findNearestPort(mx, my, classEl) {
-    if(!classEl) return null;
-    const ports = classEl.querySelectorAll('.snap-port');
-    let minDist = 30; let found = null;
-    const classX = parseFloat(classEl.style.left);
-    const classY = parseFloat(classEl.style.top);
-
-    ports.forEach(p => {
-        const px = classX + parseFloat(p.style.left);
-        const py = classY + parseFloat(p.style.top);
-        const dist = Math.hypot(mx - px, my - py);
-        if(dist < minDist) { minDist = dist; found = { element: p, index: parseInt(p.dataset.portIndex) }; }
-    });
-    return found;
-}
-
-// --- Dragging Class ---
+// --- Optimized Dragging Class ---
 function onMouseDown(e) {
     if (e.target.isContentEditable || mode !== 'move' || e.button === 2) return; 
     draggedElement = e.currentTarget;
     document.querySelectorAll('.uml-class').forEach(el => el.style.zIndex = 10);
     draggedElement.style.zIndex = 100;
-
-    const mouseX = e.clientX - panOffset.x;
-    const mouseY = e.clientY - panOffset.y;
-    const rectX = parseFloat(draggedElement.style.left);
-    const rectY = parseFloat(draggedElement.style.top);
-
-    offset.x = mouseX - rectX;
-    offset.y = mouseY - rectY;
-    
+    const mouseX = e.clientX - panOffset.x; const mouseY = e.clientY - panOffset.y;
+    const rectX = parseFloat(draggedElement.style.left); const rectY = parseFloat(draggedElement.style.top);
+    offset.x = mouseX - rectX; offset.y = mouseY - rectY;
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
 }
+
 function onMouseMove(e) {
     if (!draggedElement) return;
-    const mouseX = e.clientX - panOffset.x;
-    const mouseY = e.clientY - panOffset.y;
+    const mouseX = e.clientX - panOffset.x; const mouseY = e.clientY - panOffset.y;
     draggedElement.style.left = (mouseX - offset.x) + 'px';
     draggedElement.style.top = (mouseY - offset.y) + 'px';
-    updatePortsPosition(draggedElement);
-    updateLines();
+    scheduleUpdate(); // ใช้ตัวช่วยจัดการ Frame Rate
 }
+
 function onMouseUp() {
     draggedElement = null;
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('mouseup', onMouseUp);
 }
 
-// --- ฟังก์ชันใหม่: หาจุดเชื่อมต่อที่ขอบกล่อง (แก้ปัญหาเส้นจม) ---
-function getBestConnectionPoint(el, targetPoint) {
-    const rect = getRect(el);
-    const center = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
-    
-    // คำนวณผลต่างระยะทาง
-    const dx = targetPoint.x - center.x;
-    const dy = targetPoint.y - center.y;
-    
-    // ดูว่าควรเข้าทางไหน (บน/ล่าง หรือ ซ้าย/ขวา)
-    // โดยดูว่าระยะห่างแกนไหนมากกว่ากัน
-    let side = '';
-    let point = { x: 0, y: 0 };
-
-    if (Math.abs(dy) > Math.abs(dx)) {
-        // ระยะแนวตั้งมากกว่า -> เข้าทาง บน หรือ ล่าง
-        if (dy > 0) {
-            side = 'bottom';
-            point = { x: center.x, y: rect.bottom };
-        } else {
-            side = 'top';
-            point = { x: center.x, y: rect.top };
-        }
-    } else {
-        // ระยะแนวนอนมากกว่า -> เข้าทาง ซ้าย หรือ ขวา
-        if (dx > 0) {
-            side = 'right';
-            point = { x: rect.right, y: center.y };
-        } else {
-            side = 'left';
-            point = { x: rect.left, y: center.y };
-        }
+// --- Performance Updater (แก้บัคเส้นค้าง) ---
+function scheduleUpdate() {
+    if (!isFramePending) {
+        isFramePending = true;
+        requestAnimationFrame(() => {
+            updateLines();
+            isFramePending = false;
+        });
     }
-    return { point, side };
 }
 
-// --- Logic ---
+// --- MAIN LOGIC ---
 function updateLines() {
-    const autoConnections = [];
-    const lineGap = 6; // ระยะห่างจากขอบกล่อง (เพิ่มขึ้นนิดนึงให้สวย)
+    const classConnections = {}; 
+    const ensureClassEntry = (id) => {
+        if(!classConnections[id]) classConnections[id] = { top: [], right: [], bottom: [], left: [] };
+    };
 
     connections.forEach(conn => {
         const el1 = document.getElementById(conn.from);
         const el2 = document.getElementById(conn.to);
-        if (!el1 || !el2) return;
+        if(!el1 || !el2) return;
 
-        let p1 = null, p2 = null, side1 = null, side2 = null;
+        ensureClassEntry(conn.from); ensureClassEntry(conn.to);
+        const sides = determineSides(el1, el2);
         
-        // 1. ตรวจสอบว่ามีการล็อกจุด (Manual Port) หรือไม่
-        if (conn.fromPortIndex !== null) {
-            const res = getPortInfo(el1, conn.fromPortIndex);
-            if(res) { p1 = res.pos; side1 = res.side; }
-        }
-        if (conn.toPortIndex !== null) {
-            const res = getPortInfo(el2, conn.toPortIndex);
-            if(res) { p2 = res.pos; side2 = res.side; }
-        }
+        classConnections[conn.from][sides.from].push({ conn, isStart: true, otherEl: el2 });
+        classConnections[conn.to][sides.to].push({ conn, isStart: false, otherEl: el1 });
+    });
 
-        // 2. ถ้าฝั่งไหนไม่ได้ล็อก (เป็น Auto) ให้คำนวณหา "ขอบ" ที่ดีที่สุด
-        // กรณี: ต้นทาง Auto (คำนวณเทียบกับปลายทาง)
-        if (!p1) {
-            const refPoint = p2 || getCenter(el2); // ใช้จุดปลายทางเป็นตัวอ้างอิง
-            const best = getBestConnectionPoint(el1, refPoint); // หาขอบที่ดีที่สุด
-            p1 = best.point;
-            side1 = best.side;
+    Object.keys(classConnections).forEach(classId => {
+        const sides = classConnections[classId];
+        const el = document.getElementById(classId);
+        if(!el) return;
+        const rect = getRect(el);
+
+        ['top', 'right', 'bottom', 'left'].forEach(side => {
+            const list = sides[side];
+            if(list.length === 0) return;
+
+            list.sort((a, b) => {
+                const cA = getCenter(a.otherEl); const cB = getCenter(b.otherEl);
+                if(side === 'top' || side === 'bottom') return cA.x - cB.x;
+                return cA.y - cB.y;
+            });
+
+            const step = (side === 'top' || side === 'bottom') ? rect.width / (list.length + 1) : rect.height / (list.length + 1);
+            
+            list.forEach((item, index) => {
+                const offset = (index + 1) * step;
+                let p = { x: 0, y: 0 };
+                if(side === 'top') { p.x = rect.left + offset; p.y = rect.top; }
+                else if(side === 'bottom') { p.x = rect.left + offset; p.y = rect.bottom; }
+                else if(side === 'left') { p.x = rect.left; p.y = rect.top + offset; }
+                else if(side === 'right') { p.x = rect.right; p.y = rect.top + offset; }
+
+                const gap = 6;
+                const drawP = applyOffset(p, side, gap);
+
+                if(item.isStart) { item.conn.p1 = drawP; item.conn.side1 = side; } 
+                else { item.conn.p2 = drawP; item.conn.side2 = side; }
+            });
+        });
+    });
+
+    // เตรียมข้อมูลกล่องทั้งหมดครั้งเดียว (ลดภาระ CPU)
+    const allRects = Array.from(document.querySelectorAll('.uml-class')).map(el => ({
+        id: el.id, ...getRect(el)
+    }));
+
+    connections.forEach(conn => {
+        if(conn.p1 && conn.p2) {
+            const d = getSmartPath(conn.p1, conn.p2, conn.side1, conn.side2, allRects, conn.from, conn.to);
+            conn.pathElement.setAttribute('d', d);
+            updateHandlePos(conn, conn.p1, conn.p2);
+            
+            const labelOffset = 35;
+            setPosition(conn.startLabel, conn.p1, conn.side1, labelOffset);
+            setPosition(conn.endLabel, conn.p2, conn.side2, labelOffset);
         }
-
-        // กรณี: ปลายทาง Auto (คำนวณเทียบกับต้นทาง) << จุดที่แก้บัคเส้นจม
-        if (!p2) {
-            const refPoint = p1; // ใช้จุดต้นทางเป็นตัวอ้างอิง
-            const best = getBestConnectionPoint(el2, refPoint); // หาขอบที่ดีที่สุด
-            p2 = best.point;
-            side2 = best.side;
-        }
-
-        // 3. ดันจุดออกจากขอบเล็กน้อย (Apply Gap) เพื่อไม่ให้หัวลูกศรเกยเส้นขอบ
-        const drawP1 = applyOffset(p1, side1, lineGap);
-        const drawP2 = applyOffset(p2, side2, lineGap);
-
-        // 4. วาดเส้น
-        const d = getRoundedOrthogonalPath(drawP1, drawP2, side1);
-        conn.pathElement.setAttribute('d', d);
-        
-        conn.startSide = side1; 
-        conn.endSide = side2; 
-        updateHandlePos(conn, drawP1, drawP2);
     });
 }
 
-// --- ฟังก์ชันใหม่: ช่วยดันจุดตามทิศทาง ---
-function applyOffset(p, side, amount) {
-    if(!p) return p;
-    const newP = { x: p.x, y: p.y };
-    if (side === 'top') newP.y -= amount;
-    else if (side === 'bottom') newP.y += amount;
-    else if (side === 'left') newP.x -= amount;
-    else if (side === 'right') newP.x += amount;
-    return newP;
+function getSmartPath(p1, p2, side1, side2, obstacles, id1, id2) {
+    let s1 = {x: p1.x, y: p1.y};
+    let s2 = {x: p2.x, y: p2.y};
+    let midX = (s1.x + s2.x) / 2;
+    let midY = (s1.y + s2.y) / 2;
+    const radius = 10;
+
+    const blockers = obstacles.filter(r => r.id !== id1 && r.id !== id2);
+    const minX = Math.min(p1.x, p2.x), maxX = Math.max(p1.x, p2.x);
+    const minY = Math.min(p1.y, p2.y), maxY = Math.max(p1.y, p2.y);
+
+    if (side1 === 'top' || side1 === 'bottom') {
+        blockers.forEach(rect => {
+            if (rect.bottom > minY && rect.top < maxY) {
+                if (rect.left < maxX && rect.right > minX) {
+                     const centerRect = (rect.left + rect.right)/2;
+                     const centerLine = (p1.x + p2.x)/2;
+                     if (centerRect < centerLine) midX = Math.max(midX, rect.right + 30);
+                     else midX = Math.min(midX, rect.left - 30);
+                }
+            }
+        });
+        
+        let d = `M ${s1.x} ${s1.y}`;
+        const midY1 = (p1.y + p2.y) / 2;
+        d += ` L ${p1.x} ${midY1}`; 
+        d += ` Q ${p1.x} ${midY1+ (p1.y<midY1?radius:-radius)} ${p1.x < midX ? p1.x+radius : p1.x-radius} ${midY1}`; 
+        d += ` L ${midX} ${midY1}`; 
+        
+        if (Math.abs(midX - (p1.x+p2.x)/2) > 50) {
+             const yExit = (side1 === 'bottom') ? p1.y + 20 : p1.y - 20;
+             const yEnter = (side2 === 'bottom') ? p2.y + 20 : p2.y - 20;
+             return `M ${p1.x} ${p1.y} L ${p1.x} ${yExit} L ${midX} ${yExit} L ${midX} ${yEnter} L ${p2.x} ${yEnter} L ${p2.x} ${p2.y}`;
+        }
+        
+    } else {
+        blockers.forEach(rect => {
+             if (rect.right > minX && rect.left < maxX) {
+                 if (rect.top < maxY && rect.bottom > minY) {
+                     const centerRect = (rect.top + rect.bottom)/2;
+                     const centerLine = (p1.y + p2.y)/2;
+                     if (centerRect < centerLine) midY = Math.max(midY, rect.bottom + 30);
+                     else midY = Math.min(midY, rect.top - 30);
+                 }
+             }
+        });
+        
+        if (Math.abs(midY - (p1.y+p2.y)/2) > 50) {
+             const xExit = (side1 === 'right') ? p1.x + 20 : p1.x - 20;
+             const xEnter = (side2 === 'right') ? p2.x + 20 : p2.x - 20;
+             return `M ${p1.x} ${p1.y} L ${xExit} ${p1.y} L ${xExit} ${midY} L ${xEnter} ${midY} L ${xEnter} ${p2.y} L ${p2.x} ${p2.y}`;
+        }
+    }
+    return getRoundedOrthogonalPath(p1, p2, side1);
 }
 
+// --- Utils ---
 function getRect(el) {
     return {
-        left: parseFloat(el.style.left),
-        top: parseFloat(el.style.top),
-        width: el.offsetWidth,
-        height: el.offsetHeight,
+        left: parseFloat(el.style.left), top: parseFloat(el.style.top),
+        width: el.offsetWidth, height: el.offsetHeight,
         right: parseFloat(el.style.left) + el.offsetWidth,
         bottom: parseFloat(el.style.top) + el.offsetHeight
     };
 }
-
+function getCenter(el) { const r = getRect(el); return { x: r.left + r.width/2, y: r.top + r.height/2 }; }
+function getClosestPointOnRectBorder(rect, x, y) {
+    const cx = Math.max(rect.left, Math.min(x, rect.right));
+    const cy = Math.max(rect.top, Math.min(y, rect.bottom));
+    const dl = Math.abs(x - rect.left), dr = Math.abs(x - rect.right), dt = Math.abs(y - rect.top), db = Math.abs(y - rect.bottom);
+    const min = Math.min(dl, dr, dt, db);
+    if(min === dt) return { x: cx, y: rect.top }; if(min === db) return { x: cx, y: rect.bottom };
+    if(min === dl) return { x: rect.left, y: cy }; return { x: rect.right, y: cy };
+}
+function applyOffset(p, side, amount) {
+    if(!p) return p; const newP = { x: p.x, y: p.y };
+    if (side === 'top') newP.y -= amount; else if (side === 'bottom') newP.y += amount;
+    else if (side === 'left') newP.x -= amount; else if (side === 'right') newP.x += amount;
+    return newP;
+}
 function updateHandlePos(conn, p1, p2) {
     if(conn.startHandle) { conn.startHandle.setAttribute('cx', p1.x); conn.startHandle.setAttribute('cy', p1.y); }
     if(conn.endHandle) { conn.endHandle.setAttribute('cx', p2.x); conn.endHandle.setAttribute('cy', p2.y); }
-    updateLabelPositions(conn, p1, p2);
 }
-
-function updateLabelPositions(conn, p1, p2) {
-    // เพิ่มระยะห่างเป็น 35px (จากเดิม 25) 
-    // + ระยะ lineGap ที่เพิ่มมาตะกี้อีก 4px รวมเป็นเกือบ 40px
-    const offset = 35; 
-    setPosition(conn.startLabel, p1, conn.startSide, offset);
-    setPosition(conn.endLabel, p2, conn.endSide, offset);
-}
-
 function setPosition(labelElement, point, side, dist) {
-    if(!labelElement) return;
-    let x = point.x;
-    let y = point.y;
-
-    // คำนวณตำแหน่งตัวเลขแบบแม่นยำขึ้น
-    if (side === 'top') {
-        y -= dist; 
-    } else if (side === 'bottom') {
-        y += dist; 
-    } else if (side === 'left') {
-        x -= dist; 
-    } else if (side === 'right') {
-        x += dist; 
-    } else {
-        // กรณีมุมเฉียง หรือหา side ไม่เจอ
-        x += 20; y -= 20; 
-    }
-
-    labelElement.setAttribute('x', x);
-    labelElement.setAttribute('y', y);
+    if(!labelElement) return; let x = point.x; let y = point.y;
+    if (side === 'top') y -= dist; else if (side === 'bottom') y += dist;
+    else if (side === 'left') x -= dist; else if (side === 'right') x += dist;
+    labelElement.setAttribute('x', x); labelElement.setAttribute('y', y);
 }
-
 function updateSingleLineManual(conn, mx, my, isStart) {
     const elOther = document.getElementById(isStart ? conn.to : conn.from);
     const pOther = getCenter(elOther);
-    let d;
-    if(isStart) d = getRoundedOrthogonalPath({x:mx, y:my}, pOther, 'bottom'); 
-    else d = getRoundedOrthogonalPath(pOther, {x:mx, y:my}, 'bottom');
+    const d = `M ${isStart?mx:pOther.x} ${isStart?my:pOther.y} L ${isStart?pOther.x:mx} ${isStart?pOther.y:my}`;
     conn.pathElement.setAttribute('d', d);
 }
-
-function getPortInfo(el, index) {
-    const port = el.querySelector(`.snap-port[data-port-index="${index}"]`);
-    if(!port) return null;
-    const classRect = getRect(el);
-    const portLeft = parseFloat(port.style.left);
-    const portTop = parseFloat(port.style.top);
-    
-    return { 
-        pos: { x: classRect.left + portLeft, y: classRect.top + portTop }, 
-        side: port.dataset.side 
-    };
-}
-
 function determineSides(el1, el2) {
     const c1 = getCenter(el1); const c2 = getCenter(el2);
     const dx = c2.x - c1.x; const dy = c2.y - c1.y;
     if (Math.abs(dy) > Math.abs(dx)) return dy > 0 ? { from: 'bottom', to: 'top' } : { from: 'top', to: 'bottom' };
     else return dx > 0 ? { from: 'right', to: 'left' } : { from: 'left', to: 'right' };
 }
-function sortConnectionsByPosition(side, sideConns) {
-    sideConns.sort((a, b) => {
-        const cA = getCenter(a.otherEl); const cB = getCenter(b.otherEl);
-        if (side === 'top' || side === 'bottom') return cA.x - cB.x; else return cA.y - cB.y;
-    });
-}
 function getRoundedOrthogonalPath(p1, p2, startSide) {
     if(!p1 || !p2) return "";
-    const s1 = p1; const s2 = p2;
-    const radius = 10;
+    const s1 = p1; const s2 = p2; const radius = 10;
     if (Math.abs(s1.x - s2.x) < 5 || Math.abs(s1.y - s2.y) < 5) return `M ${s1.x} ${s1.y} L ${s2.x} ${s2.y}`;
     let d = `M ${s1.x} ${s1.y}`;
     const midY = (s1.y + s2.y) / 2; const midX = (s1.x + s2.x) / 2;
-    if (startSide === 'top' || startSide === 'bottom' || startSide === 'vertical') {
+    if (startSide === 'top' || startSide === 'bottom') {
         d += ` L ${s1.x} ${midY - (midY>s1.y?radius:-radius)} Q ${s1.x} ${midY} ${s1.x+(s2.x>s1.x?radius:-radius)} ${midY}`;
         d += ` L ${s2.x - (s2.x>s1.x?radius:-radius)} ${midY} Q ${s2.x} ${midY} ${s2.x} ${midY+(s2.y>midY?radius:-radius)} L ${s2.x} ${s2.y}`;
     } else {
@@ -671,55 +525,21 @@ function getRoundedOrthogonalPath(p1, p2, startSide) {
     }
     return d;
 }
-function getCenter(el) {
-    const r = getRect(el);
-    return { x: r.left + r.width/2, y: r.top + r.height/2 };
-}
-
-function enableEdit(el) {
-    if(mode === 'delete') return;
-    el.contentEditable = "true"; 
-    el.focus();
-    
-    // แก้ตรงนี้: ใช้ requestAnimationFrame ช่วยให้ลื่นขึ้นและตำแหน่งแม่นยำ
-    el.oninput = () => {
-        requestAnimationFrame(() => {
-            updatePortsPosition(el.closest('.uml-class'));
-            updateLines();
-        });
-    };
-
-    // ... (ส่วน onpaste และ onblur เหมือนเดิม ไม่ต้องแก้) ...
-    el.onpaste = (e) => {
-        e.preventDefault();
-        const text = (e.originalEvent || e).clipboardData.getData('text/plain');
-        document.execCommand('insertText', false, text);
-    };
-
-    el.onblur = () => { 
-        el.contentEditable = "false"; 
-        if (el.innerText.trim() === "") el.remove();
-        
-        const classEl = el.closest('.uml-class');
-        if(classEl) {
-            // อัปเดตทิ้งท้ายอีกรอบตอนพิมพ์เสร็จ
-            updatePortsPosition(classEl);
-            updateLines(); 
-        }
-    };
-}
-
 function clearAll() {
     if(confirm("ลบทั้งหมด?")) {
         document.querySelectorAll('.uml-class').forEach(e => e.remove());
         document.querySelectorAll('path.connection').forEach(e => e.remove());
         document.querySelectorAll('.conn-handle').forEach(e => e.remove());
         document.querySelectorAll('.label-text').forEach(e => e.remove());
-        connections = []; classCounter = 0;
-        
-        panOffset = { x: 0, y: 0 };
-        applyPan();
+        connections = []; classCounter = 0; panOffset = { x: 0, y: 0 }; applyPan();
     }
+}
+function enableEdit(el) {
+    if(mode === 'delete') return;
+    el.contentEditable = "true"; el.focus();
+    el.oninput = () => { scheduleUpdate(); };
+    el.onpaste = (e) => { e.preventDefault(); document.execCommand('insertText', false, (e.originalEvent || e).clipboardData.getData('text/plain')); };
+    el.onblur = () => { el.contentEditable = "false"; if (el.innerText.trim() === "") el.remove(); scheduleUpdate(); };
 }
 
 // Initial Class
